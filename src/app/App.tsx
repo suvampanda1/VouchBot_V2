@@ -10,8 +10,8 @@ import {
   Image, Loader2, Edit3, Check, Brain, Star,
 } from "lucide-react";
 import MagicRings from "./MagicRings";
-import RobotCharacter, { type RobotState } from "./RobotCharacter";
-import BrainParticles from "./BrainParticles";
+import RobotCharacter from "./RobotCharacter";
+import SplineBrain from "./SplineBrain";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const NEON      = "#ff0099";
@@ -417,6 +417,7 @@ function MainApp({ user, aiStatus, onLogout }: { user: VouchUser; aiStatus: AISt
     );
     setChats(updatedChats);
     setInputValue("");
+    const thinkingStartedAt = Date.now();
     setAnimState('thinking');
     if (inputRef.current) inputRef.current.style.height = "auto";
     setLoading(true);
@@ -449,14 +450,24 @@ function MainApp({ user, aiStatus, onLogout }: { user: VouchUser; aiStatus: AISt
         ));
       }
     } finally {
+      if (!ctrl.signal.aborted) {
+        const remainingThinkingTime = 2600 - (Date.now() - thinkingStartedAt);
+        if (remainingThinkingTime > 0) {
+          await new Promise(resolve => window.setTimeout(resolve, remainingThinkingTime));
+        }
+      }
       setLoading(false);
-      setAnimState('responding');
-      setTimeout(() => setAnimState(prev => prev === 'responding' ? 'idle' : prev), 2500);
+      if (ctrl.signal.aborted) {
+        setAnimState('idle');
+      } else {
+        setAnimState('responding');
+        setTimeout(() => setAnimState(prev => prev === 'responding' ? 'idle' : prev), 2500);
+      }
       abortRef.current = null;
     }
   }, [inputValue, activeChatId, chats, loading, aiStatus.ready]);
 
-  const handleStop = () => { abortRef.current?.abort(); setLoading(false); };
+  const handleStop = () => { abortRef.current?.abort(); setLoading(false); setAnimState('idle'); };
 
   const handleNewChat = () => {
     handleStop();
@@ -677,7 +688,7 @@ function MainApp({ user, aiStatus, onLogout }: { user: VouchUser; aiStatus: AISt
 
         {/* View content */}
         <div className="flex-1 overflow-y-auto min-h-0 relative">
-          {view === "chat"    && <ChatView messages={messages} hasMessages={hasMessages} loading={loading} greetIdx={greetIdx} greetFade={greetFade} userName={user.name} inputRef={inputRef} setInputValue={setInputValue} setAnimState={setAnimState} handleSend={handleSend} messagesEndRef={messagesEndRef} animState={animState} />}
+          {view === "chat"    && <ChatView messages={messages} hasMessages={hasMessages} sidebarOpen={sidebarOpen} loading={loading} greetIdx={greetIdx} greetFade={greetFade} userName={user.name} inputRef={inputRef} setInputValue={setInputValue} setAnimState={setAnimState} handleSend={handleSend} messagesEndRef={messagesEndRef} animState={animState} />}
           {view === "search"  && <SearchView chats={chats} query={searchQuery} setQuery={setSearchQuery} onSelectChat={id => { setActiveChatId(id); setView("chat"); }} />}
           {view === "library" && <LibraryView onStartSubject={prompt => handleSend(prompt)} />}
           {view === "notes"   && <NotesView notes={notes} activeId={activeNoteId} setActiveId={setActiveNoteId} addNote={addNote} updateNote={updateNote} deleteNote={id => { setNotes(p => p.filter(n => n.id !== id)); if (activeNoteId === id) setActiveNoteId(null); }} />}
@@ -750,173 +761,210 @@ function MainApp({ user, aiStatus, onLogout }: { user: VouchUser; aiStatus: AISt
 // ── Chat View ──────────────────────────────────────────────────────────────────
 type AnimState = 'idle' | 'typing' | 'thinking' | 'responding';
 
-function ChatView({ messages, hasMessages, loading, greetIdx, greetFade, userName, inputRef, setInputValue, setAnimState, handleSend, messagesEndRef, animState }: any) {
-  const robotState: RobotState = animState === 'thinking' ? 'thinking' : hasMessages ? 'side' : 'idle';
-  const showRings  = animState === 'typing';
-  const showBrain  = animState === 'thinking';
-  const robotCentered = !hasMessages;
+function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greetFade, userName, inputRef, setInputValue, setAnimState, handleSend, messagesEndRef, animState }: any) {
+  const showRings = animState === 'typing';
+  const showBrain = animState === 'thinking';
+  const [showSuggestions, setShowSuggestions] = useState(() => !hasMessages);
 
-  if (!hasMessages) {
-    return (
-      <div className="relative flex flex-col items-center justify-center h-full px-4 gap-6 overflow-hidden">
-        {/* Ambient glow */}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 65% 50% at 50% 50%, rgba(255,0,153,0.08) 0%, transparent 70%)" }} />
+  useEffect(() => {
+    if (hasMessages) {
+      setShowSuggestions(false);
+      return;
+    }
 
-        {/* Magic rings BG — fades in when typing */}
-        <div
-          className="absolute inset-0 pointer-events-none transition-opacity duration-700"
-          style={{ opacity: showRings ? 1 : 0, zIndex: 0 }}
-        >
-          <MagicRings
-            color="#ff0099"
-            colorTwo="#00ccff"
-            ringCount={7}
-            speed={0.8}
-            attenuation={9}
-            lineThickness={2.5}
-            baseRadius={0.3}
-            radiusStep={0.09}
-            opacity={0.85}
-            noiseAmount={0.06}
-            followMouse
-            mouseInfluence={0.12}
-            parallax={0.04}
-            clickBurst
-          />
-        </div>
+    setShowSuggestions(true);
+    const exitTimer = window.setTimeout(() => setShowSuggestions(false), 4800);
+    return () => window.clearTimeout(exitTimer);
+  }, [hasMessages]);
 
-        {/* Robot — centered idle, or small side corner */}
-        <div
-          className="relative z-10 transition-all duration-700 ease-in-out"
-          style={{
-            transform: robotCentered ? 'translateX(0) scale(1)' : 'translateX(-180px) translateY(60px) scale(0.55)',
-            opacity: 1,
-            position: robotCentered ? 'relative' : 'absolute',
-            bottom: robotCentered ? 'auto' : 24,
-            left:   robotCentered ? 'auto' : 24,
-          }}
-        >
-          <RobotCharacter state={robotState} size={robotCentered ? 180 : 130} />
-        </div>
+  const chipPositions = [
+    { left: 50, top: 5 },
+    { left: 76, top: 17 },
+    { left: 83, top: 48 },
+    { left: 76, top: 79 },
+    { left: 50, top: 94 },
+    { left: 24, top: 79 },
+    { left: 18, top: 48 },
+    { left: 24, top: 17 },
+  ];
 
-        {/* Brain particles — appears on thinking */}
-        <div
-          className="absolute pointer-events-none z-10 transition-opacity duration-500"
-          style={{
-            opacity: showBrain ? 1 : 0,
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -55%)',
-          }}
-        >
-          <BrainParticles active={showBrain} width={420} height={320} />
-        </div>
-
-        {/* Greeting & chips — fade out when thinking */}
-        <div
-          className="relative z-10 flex flex-col items-center gap-3 transition-all duration-500"
-          style={{ opacity: showBrain ? 0 : 1, transform: showBrain ? 'translateY(-20px)' : 'none' }}
-        >
-          <h1
-            className="text-[28px] md:text-[32px] font-medium text-center transition-all duration-300"
-            style={{
-              color: "#eaeaf4",
-              letterSpacing: "-0.01em",
-              opacity: greetFade ? 1 : 0,
-              transform: greetFade ? "translateY(0)" : "translateY(8px)",
-            }}
-          >
-            {GREETINGS[greetIdx]}, {userName}?
-          </h1>
-          <p className="text-sm text-center max-w-md" style={{ color: "#555" }}>
-            Your AI learning coach — ask me anything about studies, exams, or finding tutors on Vouch.
-          </p>
-        </div>
-
-        {/* Thinking label */}
-        {showBrain && (
-          <div className="relative z-20 flex items-center gap-2 mt-[200px]">
-            <Brain size={16} style={{ color: '#00ccff' }} />
-            <span className="text-sm font-medium" style={{ color: '#00ccff' }}>Deep thinking…</span>
-            <span style={{ display: 'inline-flex', gap: 3 }}>
-              {[0,1,2].map(i => (
-                <span key={i} style={{
-                  width: 5, height: 5, borderRadius: '50%', background: '#00ccff',
-                  animation: `vb-b 1.1s ease-in-out ${i*0.18}s infinite`, display: 'inline-block',
-                  boxShadow: '0 0 6px #00ccff',
-                }} />
-              ))}
-            </span>
-          </div>
-        )}
-
-        {/* Suggestion chips */}
-        <div
-          className="relative z-10 flex flex-wrap gap-2 justify-center max-w-2xl transition-all duration-500"
-          style={{ opacity: showBrain ? 0 : 1 }}
-        >
-          {SUGGESTION_CHIPS.map(chip => (
-            <button
-              key={chip.label}
-              onClick={() => {
-                setInputValue(chip.prompt);
-                setAnimState('typing');
-                setTimeout(() => inputRef.current?.focus(), 50);
-              }}
-              className="rounded-full px-4 py-2 text-sm transition-all"
-              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#999" }}
-              onMouseEnter={e => { e.currentTarget.style.background = NEON_DIM; e.currentTarget.style.borderColor = "rgba(255,0,153,0.3)"; e.currentTarget.style.color = NEON; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#999"; }}
-            >
-              {chip.emoji} {chip.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // Has messages — chat thread with floating robot corner + BG effects
   return (
     <div className="relative h-full">
-      {/* Magic rings BG in chat too */}
+      {/* The Spline scene stays mounted so it is ready when thinking starts. */}
       <div
-        className="absolute inset-0 pointer-events-none transition-opacity duration-700"
-        style={{ opacity: showRings ? 0.5 : 0, zIndex: 0 }}
-      >
-        <MagicRings color="#ff0099" colorTwo="#00ccff" ringCount={5} speed={0.6} attenuation={12} opacity={0.6} noiseAmount={0.04} />
-      </div>
-
-      {/* Brain overlay */}
-      <div
-        className="absolute pointer-events-none transition-opacity duration-500"
+        aria-hidden={!showBrain}
+        className="pointer-events-none flex flex-col items-center justify-center transition-opacity duration-500"
         style={{
+          position: 'fixed',
+          left: sidebarOpen ? 264 : 0,
+          right: 0,
+          top: 52,
+          bottom: 108,
+          zIndex: showBrain ? 30 : -1,
           opacity: showBrain ? 1 : 0,
-          right: 16, top: '50%', transform: 'translateY(-50%)',
-          zIndex: 5,
+          background: showBrain ? 'radial-gradient(ellipse 42% 45% at 50% 48%, rgba(18,18,24,0.55) 0%, rgba(15,15,19,0.18) 70%, transparent 100%)' : 'transparent',
         }}
       >
-        <BrainParticles active={showBrain} width={280} height={220} />
+        <SplineBrain active={showBrain} />
+        <div className="flex items-center gap-2 -mt-5">
+          <Brain size={16} style={{ color: '#00ccff' }} />
+          <span className="text-sm font-medium" style={{ color: '#00ccff' }}>Deep thinking...</span>
+          <span style={{ display: 'inline-flex', gap: 3 }}>
+            {[0, 1, 2].map(i => (
+              <span key={i} style={{
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: '#00ccff',
+                animation: `vb-b 1.1s ease-in-out ${i * 0.18}s infinite`,
+                display: 'inline-block',
+                boxShadow: '0 0 6px #00ccff',
+              }} />
+            ))}
+          </span>
+        </div>
       </div>
 
-      {/* Robot corner — shows side profile */}
-      <div
-        className="absolute pointer-events-none transition-all duration-700"
-        style={{ bottom: 8, right: 16, zIndex: 6, opacity: 0.85 }}
-      >
-        <RobotCharacter state={robotState} size={90} />
-      </div>
+      {!hasMessages ? (
+        <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-4 pb-3">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse 65% 55% at 50% 45%, rgba(255,0,153,0.09) 0%, transparent 72%)" }}
+          />
 
-      {/* Messages */}
-      <div className="relative z-10 max-w-3xl mx-auto px-4 py-6 space-y-6">
-        {messages.map((msg: ChatMessage) => <Bubble key={msg.id} message={msg} />)}
-        {loading && messages[messages.length - 1]?.role === "user" && <TypingDots />}
-        <div ref={messagesEndRef} />
-      </div>
+          <div
+            className="absolute inset-0 pointer-events-none transition-opacity duration-700"
+            style={{ opacity: showRings ? 1 : 0, zIndex: 0 }}
+          >
+            <MagicRings
+              color="#ff0099"
+              colorTwo="#00ccff"
+              ringCount={7}
+              speed={0.8}
+              attenuation={9}
+              lineThickness={2.5}
+              baseRadius={0.3}
+              radiusStep={0.09}
+              opacity={0.85}
+              noiseAmount={0.06}
+              followMouse
+              mouseInfluence={0.12}
+              parallax={0.04}
+              clickBurst
+            />
+          </div>
+
+          <div
+            className="relative z-10 w-full max-w-[820px]"
+            style={{ height: 'clamp(250px, 43vh, 350px)' }}
+          >
+            <div className="absolute inset-0 pointer-events-none">
+              {SUGGESTION_CHIPS.map((chip, index) => {
+                const position = chipPositions[index];
+                return (
+                  <div
+                    key={chip.label}
+                    aria-hidden={!showSuggestions}
+                    className="absolute pointer-events-auto"
+                    style={{
+                      left: `${position.left}%`,
+                      top: `${position.top}%`,
+                      opacity: showSuggestions ? 1 : 0,
+                      transform: `translate(-50%, -50%) scale(${showSuggestions ? 1 : 0.72})`,
+                      transition: `opacity 650ms ease ${index * 45}ms, transform 750ms cubic-bezier(0.22, 1, 0.36, 1) ${index * 45}ms`,
+                      pointerEvents: showSuggestions ? 'auto' : 'none',
+                    }}
+                  >
+                    <button
+                      tabIndex={showSuggestions ? 0 : -1}
+                      onClick={() => {
+                        setInputValue(chip.prompt);
+                        setAnimState('typing');
+                        setTimeout(() => inputRef.current?.focus(), 50);
+                      }}
+                      className="rounded-full whitespace-nowrap px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm"
+                      style={{
+                        background: 'rgba(28,25,35,0.9)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: '#aaa',
+                        boxShadow: '0 10px 28px rgba(0,0,0,0.28)',
+                        animation: `vb-chip-float 2.8s ease-in-out ${index * 0.16}s infinite`,
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = NEON_DIM;
+                        e.currentTarget.style.borderColor = 'rgba(255,0,153,0.4)';
+                        e.currentTarget.style.color = NEON;
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'rgba(28,25,35,0.9)';
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                        e.currentTarget.style.color = '#aaa';
+                      }}
+                    >
+                      {chip.emoji} {chip.label}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div
+              className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
+              style={{ filter: 'drop-shadow(0 0 25px rgba(255,0,153,0.22))' }}
+            >
+              <RobotCharacter state="idle" size={220} />
+            </div>
+          </div>
+
+          <div className="relative z-10 flex flex-col items-center gap-2">
+            <h1
+              className="w-full max-w-2xl break-words px-2 text-[28px] md:text-[32px] font-medium text-center transition-all duration-300"
+              style={{
+                color: '#eaeaf4',
+                letterSpacing: 0,
+                opacity: greetFade ? 1 : 0,
+                transform: greetFade ? 'translateY(0)' : 'translateY(8px)',
+              }}
+            >
+              {GREETINGS[greetIdx]}, {userName}?
+            </h1>
+            <p className="text-sm text-center max-w-md" style={{ color: '#555' }}>
+              Your AI learning coach - ask me anything about studies, exams, or finding tutors on Vouch.
+            </p>
+          </div>
+
+          <style>{`
+            @keyframes vb-chip-float {
+              0%, 100% { transform: translateY(0); }
+              50% { transform: translateY(-7px); }
+            }
+          `}</style>
+        </div>
+      ) : (
+        <div className="relative min-h-full">
+          <div
+            className="absolute inset-0 pointer-events-none transition-opacity duration-700"
+            style={{ opacity: showRings ? 0.5 : 0, zIndex: 0 }}
+          >
+            <MagicRings color="#ff0099" colorTwo="#00ccff" ringCount={5} speed={0.6} attenuation={12} opacity={0.6} noiseAmount={0.04} />
+          </div>
+
+          <div
+            className="relative z-10 max-w-3xl mx-auto px-4 py-6 space-y-6 transition-all duration-500"
+            style={{
+              opacity: showBrain ? 0.16 : 1,
+              filter: showBrain ? 'blur(1.5px)' : 'none',
+            }}
+          >
+            {messages.map((msg: ChatMessage) => <Bubble key={msg.id} message={msg} />)}
+            {loading && messages[messages.length - 1]?.role === 'user' && <TypingDots />}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
 // ── Search View ────────────────────────────────────────────────────────────────
 function SearchView({ chats, query, setQuery, onSelectChat }: { chats: Conversation[]; query: string; setQuery: (q: string) => void; onSelectChat: (id: string) => void }) {
   const results = query.trim()

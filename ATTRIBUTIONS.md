@@ -2,4 +2,4 @@ This Figma Make file includes components from [shadcn/ui](https://ui.shadcn.com/
 
 This Figma Make file includes photos from [Unsplash](https://unsplash.com) used under [license](https://unsplash.com/license).
 
-This app uses a locally supplied neon-pink adaptation of the public [Particle AI Brain](https://app.spline.design/community/file/fb5c9572-898e-4c53-a7ea-fab22311ea46) scene by Design Favor, rendered with Spline Runtime.
+This app embeds the public [Particles](https://app.spline.design/community/file/be5af5a2-00e4-4e8a-87b2-057a3e3381d4) scene by thearchmind using Spline.

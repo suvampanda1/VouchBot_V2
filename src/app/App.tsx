@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import MagicRings from "./MagicRings";
 import RobotCharacter from "./RobotCharacter";
-import SplineBrain from "./SplineBrain";
+import SplineSceneBackground from "./SplineSceneBackground";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const NEON      = "#ff0099";
@@ -763,7 +763,7 @@ type AnimState = 'idle' | 'typing' | 'thinking' | 'responding';
 
 function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greetFade, userName, inputRef, setInputValue, setAnimState, handleSend, messagesEndRef, animState }: any) {
   const showRings = animState === 'typing';
-  const showBrain = animState === 'thinking';
+  const showThinkingScene = animState === 'thinking';
   const [showSuggestions, setShowSuggestions] = useState(() => !hasMessages);
 
   useEffect(() => {
@@ -790,7 +790,7 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
 
   return (
     <div className="relative h-full">
-      {/* The supplied local Spline scene remains mounted as the conversation background. */}
+      {/* The selected Spline community scene remains mounted as the conversation background. */}
       <div
         aria-hidden={!hasMessages}
         className="pointer-events-none transition-opacity duration-700"
@@ -805,13 +805,13 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
           overflow: 'hidden',
         }}
       >
-        <SplineBrain active={hasMessages} thinking={showBrain} />
+        <SplineSceneBackground active={hasMessages} thinking={showThinkingScene} />
         <div
           className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2 transition-opacity duration-300"
           style={{
             bottom: 'clamp(36px, 8vh, 82px)',
             zIndex: 2,
-            opacity: showBrain ? 1 : 0,
+            opacity: showThinkingScene ? 1 : 0,
             color: NEON,
             textShadow: '0 0 14px rgba(255,0,153,0.75)',
           }}

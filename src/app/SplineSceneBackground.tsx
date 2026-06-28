@@ -40,6 +40,19 @@ export default function SplineSceneBackground({ active, thinking }: Props) {
           pointerEvents: "none",
         }}
       />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          right: 0,
+          bottom: 0,
+          width: 150,
+          height: 48,
+          background:
+            "linear-gradient(135deg, transparent 0%, rgba(0,0,0,0.92) 42%, #000 68%)",
+          pointerEvents: "none",
+        }}
+      />
     </div>
   );
 }

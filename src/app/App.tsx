@@ -790,35 +790,44 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
 
   return (
     <div className="relative h-full">
-      {/* The Spline scene stays mounted so it is ready when thinking starts. */}
+      {/* The supplied local Spline scene remains mounted as the conversation background. */}
       <div
-        aria-hidden={!showBrain}
-        className="pointer-events-none flex flex-col items-center justify-center transition-opacity duration-500"
+        aria-hidden={!hasMessages}
+        className="pointer-events-none transition-opacity duration-700"
         style={{
           position: 'fixed',
           left: sidebarOpen ? 264 : 0,
           right: 0,
           top: 52,
           bottom: 108,
-          zIndex: showBrain ? 30 : -1,
-          opacity: showBrain ? 1 : 0,
-          background: showBrain ? 'radial-gradient(ellipse 42% 45% at 50% 48%, rgba(18,18,24,0.55) 0%, rgba(15,15,19,0.18) 70%, transparent 100%)' : 'transparent',
+          zIndex: 0,
+          opacity: hasMessages ? 1 : 0,
+          overflow: 'hidden',
         }}
       >
-        <SplineBrain active={showBrain} />
-        <div className="flex items-center gap-2 -mt-5">
-          <Brain size={16} style={{ color: '#00ccff' }} />
-          <span className="text-sm font-medium" style={{ color: '#00ccff' }}>Deep thinking...</span>
+        <SplineBrain active={hasMessages} thinking={showBrain} />
+        <div
+          className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2 transition-opacity duration-300"
+          style={{
+            bottom: 'clamp(36px, 8vh, 82px)',
+            zIndex: 2,
+            opacity: showBrain ? 1 : 0,
+            color: NEON,
+            textShadow: '0 0 14px rgba(255,0,153,0.75)',
+          }}
+        >
+          <Brain size={16} />
+          <span className="text-sm font-medium">Deep thinking...</span>
           <span style={{ display: 'inline-flex', gap: 3 }}>
             {[0, 1, 2].map(i => (
               <span key={i} style={{
                 width: 5,
                 height: 5,
                 borderRadius: '50%',
-                background: '#00ccff',
+                background: NEON,
                 animation: `vb-b 1.1s ease-in-out ${i * 0.18}s infinite`,
                 display: 'inline-block',
-                boxShadow: '0 0 6px #00ccff',
+                boxShadow: `0 0 7px ${NEON}`,
               }} />
             ))}
           </span>
@@ -950,11 +959,7 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
           </div>
 
           <div
-            className="relative z-10 max-w-3xl mx-auto px-4 py-6 space-y-6 transition-all duration-500"
-            style={{
-              opacity: showBrain ? 0.16 : 1,
-              filter: showBrain ? 'blur(1.5px)' : 'none',
-            }}
+            className="relative z-10 max-w-3xl mx-auto px-4 py-6 space-y-6"
           >
             {messages.map((msg: ChatMessage) => <Bubble key={msg.id} message={msg} />)}
             {loading && messages[messages.length - 1]?.role === 'user' && <TypingDots />}
@@ -1363,8 +1368,9 @@ function Bubble({ message }: { message: ChatMessage }) {
         <div
           className="rounded-2xl px-4 py-3"
           style={{
-            background: isUser ? "rgba(255,0,153,0.14)" : message.error ? "rgba(255,60,60,0.08)" : "rgba(255,255,255,0.04)",
-            border: isUser ? "1px solid rgba(255,0,153,0.25)" : message.error ? "1px solid rgba(255,60,60,0.2)" : "1px solid rgba(255,255,255,0.06)",
+            background: message.error ? "rgba(255,60,60,0.08)" : "transparent",
+            border: isUser ? "1px solid rgba(255,0,153,0.22)" : message.error ? "1px solid rgba(255,60,60,0.2)" : "1px solid rgba(255,255,255,0.08)",
+            textShadow: "0 1px 9px rgba(0,0,0,0.95)",
           }}
         >
           {message.error && (
@@ -1409,7 +1415,7 @@ function TypingDots() {
   return (
     <div className="flex gap-3 items-start">
       <VouchLogo size={26} />
-      <div className="rounded-2xl px-5 py-4 flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+      <div className="rounded-2xl px-5 py-4 flex items-center gap-1.5" style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.08)", textShadow: "0 1px 9px rgba(0,0,0,0.95)" }}>
         {[0, 1, 2].map(i => (
           <span key={i} style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: NEON, boxShadow: `0 0 6px ${NEON}`, animation: `vb-b 1.1s ease-in-out ${i * 0.18}s infinite` }} />
         ))}

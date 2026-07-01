@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 
 interface Props {
   active: boolean;
@@ -31,23 +31,43 @@ const COLORS = [
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
-export default function InteractiveParticleBackground({ active, thinking }: Props) {
+const InteractiveParticleBackground = memo(function InteractiveParticleBackground({ active, thinking }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef({ active, thinking });
   stateRef.current = { active, thinking };
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
+    const context = canvas?.getContext("2d", { alpha: true });
     if (!canvas || !context) return;
 
     let width = 1;
     let height = 1;
-    let pixelRatio = 1;
     let animationFrame = 0;
     let lastTime = performance.now();
     let elapsed = 0;
+    let wasActive = false;
+    let fieldGlow: CanvasGradient | null = null;
+    let bounds = canvas.getBoundingClientRect();
     let particles: Particle[] = [];
+
+    const sprites = COLORS.map(([red, green, blue]) => {
+      const sprite = document.createElement("canvas");
+      sprite.width = 64;
+      sprite.height = 64;
+      const spriteContext = sprite.getContext("2d");
+      if (!spriteContext) return sprite;
+
+      const glow = spriteContext.createRadialGradient(32, 32, 0, 32, 32, 32);
+      glow.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 1)`);
+      glow.addColorStop(0.1, `rgba(${red}, ${green}, ${blue}, 0.96)`);
+      glow.addColorStop(0.3, `rgba(${red}, ${green}, ${blue}, 0.44)`);
+      glow.addColorStop(0.62, `rgba(${red}, ${green}, ${blue}, 0.12)`);
+      glow.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
+      spriteContext.fillStyle = glow;
+      spriteContext.fillRect(0, 0, 64, 64);
+      return sprite;
+    });
 
     const pointer = {
       x: 0,
@@ -58,7 +78,8 @@ export default function InteractiveParticleBackground({ active, thinking }: Prop
     };
 
     const createParticles = () => {
-      const count = Math.round(clamp((width * height) / 1700, 280, 650));
+      const maxCount = width < 720 ? 300 : 420;
+      const count = Math.round(clamp((width * height) / 2500, 190, maxCount));
       const maxRadius = Math.max(120, Math.min(width * 0.54, height * 0.74));
       const centerX = width * 0.5;
       const centerY = height * 0.5;
@@ -81,27 +102,39 @@ export default function InteractiveParticleBackground({ active, thinking }: Prop
           size: 0.45 + Math.random() * 1.65,
           depth,
           color: Math.floor(Math.random() * COLORS.length),
-          alpha: 0.3 + Math.random() * 0.62,
+          alpha: 0.34 + Math.random() * 0.58,
         };
       });
     };
 
     const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      width = Math.max(1, rect.width);
-      height = Math.max(1, rect.height);
-      pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      bounds = canvas.getBoundingClientRect();
+      width = Math.max(1, bounds.width);
+      height = Math.max(1, bounds.height);
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
       canvas.width = Math.round(width * pixelRatio);
       canvas.height = Math.round(height * pixelRatio);
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.imageSmoothingEnabled = true;
+
+      fieldGlow = context.createRadialGradient(
+        width * 0.5,
+        height * 0.5,
+        0,
+        width * 0.5,
+        height * 0.5,
+        Math.min(width, height) * 0.58,
+      );
+      fieldGlow.addColorStop(0, "rgba(255, 0, 153, 0.055)");
+      fieldGlow.addColorStop(0.38, "rgba(168, 85, 247, 0.035)");
+      fieldGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
       createParticles();
     };
 
     const updatePointer = (clientX: number, clientY: number, pressed: boolean) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
-      const inside = x >= 0 && x <= rect.width && y >= 0 && y <= rect.height;
+      const x = clientX - bounds.left;
+      const y = clientY - bounds.top;
+      const inside = x >= 0 && x <= bounds.width && y >= 0 && y <= bounds.height;
 
       pointer.active = inside;
       if (!inside) return;
@@ -134,34 +167,31 @@ export default function InteractiveParticleBackground({ active, thinking }: Prop
     resize();
 
     const draw = (now: number) => {
+      animationFrame = requestAnimationFrame(draw);
+
+      if (!stateRef.current.active || document.hidden) {
+        if (wasActive) context.clearRect(0, 0, width, height);
+        wasActive = false;
+        lastTime = now;
+        return;
+      }
+
+      wasActive = true;
       const frameScale = clamp((now - lastTime) / 16.67, 0.35, 2);
       lastTime = now;
       elapsed += frameScale * 16.67;
       context.clearRect(0, 0, width, height);
 
-      if (!stateRef.current.active) {
-        animationFrame = requestAnimationFrame(draw);
-        return;
-      }
-
       const centerX = width * 0.5;
       const centerY = height * 0.5;
       const thinkingBoost = stateRef.current.thinking ? 1.85 : 1;
       const interactionRadius = Math.min(220, Math.max(130, width * 0.24));
+      const interactionRadiusSquared = interactionRadius * interactionRadius;
 
-      const fieldGlow = context.createRadialGradient(
-        centerX,
-        centerY,
-        0,
-        centerX,
-        centerY,
-        Math.min(width, height) * 0.58,
-      );
-      fieldGlow.addColorStop(0, "rgba(255, 0, 153, 0.055)");
-      fieldGlow.addColorStop(0.38, "rgba(168, 85, 247, 0.035)");
-      fieldGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
-      context.fillStyle = fieldGlow;
-      context.fillRect(0, 0, width, height);
+      if (fieldGlow) {
+        context.fillStyle = fieldGlow;
+        context.fillRect(0, 0, width, height);
+      }
       context.globalCompositeOperation = "lighter";
 
       for (const particle of particles) {
@@ -181,12 +211,13 @@ export default function InteractiveParticleBackground({ active, thinking }: Prop
         let forceX = (targetX - particle.x) * 0.018;
         let forceY = (targetY - particle.y) * 0.018;
 
-        if (pointer.active) {
+        if (pointer.active && pointer.strength > 0.02) {
           const dx = particle.x - pointer.x;
           const dy = particle.y - pointer.y;
-          const distance = Math.max(1, Math.hypot(dx, dy));
+          const distanceSquared = dx * dx + dy * dy;
 
-          if (distance < interactionRadius) {
+          if (distanceSquared < interactionRadiusSquared) {
+            const distance = Math.sqrt(Math.max(1, distanceSquared));
             const proximity = 1 - distance / interactionRadius;
             const force = proximity * proximity * (0.5 + pointer.strength * 1.3 + pointer.burst * 2.4);
             forceX += (dx / distance) * force - (dy / distance) * force * 0.36;
@@ -199,24 +230,23 @@ export default function InteractiveParticleBackground({ active, thinking }: Prop
         particle.x += particle.vx * frameScale;
         particle.y += particle.vy * frameScale;
 
-        const color = COLORS[particle.color];
-        const glow = stateRef.current.thinking ? 1.28 : 1;
+        const glow = stateRef.current.thinking ? 1.24 : 1;
         const radius = particle.size * (0.72 + particle.depth * 0.55) * glow;
-        const alpha = particle.alpha * (0.58 + particle.depth * 0.42);
-
-        context.beginPath();
-        context.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
-        context.fillStyle = `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`;
-        context.shadowColor = `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.8)`;
-        context.shadowBlur = 5 + radius * 3.2;
-        context.fill();
+        const visualSize = 9 + radius * 7;
+        context.globalAlpha = particle.alpha * (0.58 + particle.depth * 0.42);
+        context.drawImage(
+          sprites[particle.color],
+          particle.x - visualSize * 0.5,
+          particle.y - visualSize * 0.5,
+          visualSize,
+          visualSize,
+        );
       }
 
-      context.shadowBlur = 0;
+      context.globalAlpha = 1;
       context.globalCompositeOperation = "source-over";
       pointer.strength *= 0.982;
       pointer.burst *= 0.92;
-      animationFrame = requestAnimationFrame(draw);
     };
 
     animationFrame = requestAnimationFrame(draw);
@@ -248,4 +278,6 @@ export default function InteractiveParticleBackground({ active, thinking }: Prop
       }}
     />
   );
-}
+});
+
+export default InteractiveParticleBackground;

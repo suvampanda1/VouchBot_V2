@@ -62,6 +62,7 @@ void main() {
 `;
 
 interface MagicRingsProps {
+  active?: boolean;
   color?: string;
   colorTwo?: string;
   speed?: number;
@@ -86,6 +87,7 @@ interface MagicRingsProps {
 }
 
 export default function MagicRings({
+  active = true,
   color = '#ff0099',
   colorTwo = '#00ccff',
   speed = 1,
@@ -117,7 +119,7 @@ export default function MagicRings({
   const burstRef = useRef(0);
 
   propsRef.current = {
-    color, colorTwo, speed, ringCount, attenuation, lineThickness,
+    active, color, colorTwo, speed, ringCount, attenuation, lineThickness,
     baseRadius, radiusStep, scaleRate, opacity, noiseAmount,
     rotation, ringGap, fadeIn, fadeOut, followMouse, mouseInfluence,
     hoverScale, parallax, clickBurst,
@@ -129,7 +131,11 @@ export default function MagicRings({
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ alpha: true });
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: false,
+        powerPreference: 'high-performance',
+      });
     } catch {
       return;
     }
@@ -173,7 +179,7 @@ export default function MagicRings({
     const resize = () => {
       const w = mount.clientWidth;
       const h = mount.clientHeight;
-      const dpr = Math.min(window.devicePixelRatio, 2);
+      const dpr = Math.min(window.devicePixelRatio, 1.25);
       renderer.setSize(w, h);
       renderer.setPixelRatio(dpr);
       uniforms.uResolution.value.set(w * dpr, h * dpr);
@@ -201,6 +207,7 @@ export default function MagicRings({
     const animate = (t: number) => {
       frameId = requestAnimationFrame(animate);
       const p = propsRef.current;
+      if (!p.active || document.hidden) return;
 
       smoothMouseRef.current[0] += (mouseRef.current[0] - smoothMouseRef.current[0]) * 0.08;
       smoothMouseRef.current[1] += (mouseRef.current[1] - smoothMouseRef.current[1]) * 0.08;

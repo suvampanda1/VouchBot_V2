@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { memo, useState, useRef, useEffect, useCallback } from "react";
 import {
   Plus, Search, Library, Settings, Mic, PanelLeft,
   Activity, User, Smile, Gauge, Link, Sun, CreditCard,
@@ -71,6 +71,8 @@ interface ChatMessage {
   content: string;
   error?: boolean;
 }
+const EMPTY_MESSAGES: ChatMessage[] = [];
+
 interface Conversation {
   id: string;
   title: string;
@@ -366,10 +368,12 @@ function MainApp({ user, aiStatus, onLogout }: { user: VouchUser; aiStatus: AISt
   const abortRef      = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef      = useRef<HTMLTextAreaElement>(null);
+  const inputValueRef = useRef(inputValue);
+  inputValueRef.current = inputValue;
   const settingsRef   = useRef<HTMLDivElement>(null);
 
   const activeChat = chats.find(c => c.id === activeChatId) ?? null;
-  const messages   = activeChat?.messages ?? [];
+  const messages   = activeChat?.messages ?? EMPTY_MESSAGES;
   const hasMessages = messages.length > 0;
 
   // Persist
@@ -390,7 +394,7 @@ function MainApp({ user, aiStatus, onLogout }: { user: VouchUser; aiStatus: AISt
 
   // ── Chat send ──
   const handleSend = useCallback(async (overrideText?: string) => {
-    const text = (overrideText ?? inputValue).trim();
+    const text = (overrideText ?? inputValueRef.current).trim();
     if (!text || loading || !aiStatus.ready) return;
 
     setView("chat");
@@ -465,7 +469,7 @@ function MainApp({ user, aiStatus, onLogout }: { user: VouchUser; aiStatus: AISt
       }
       abortRef.current = null;
     }
-  }, [inputValue, activeChatId, chats, loading, aiStatus.ready]);
+  }, [activeChatId, chats, loading, aiStatus.ready]);
 
   const handleStop = () => { abortRef.current?.abort(); setLoading(false); setAnimState('idle'); };
 
@@ -761,7 +765,7 @@ function MainApp({ user, aiStatus, onLogout }: { user: VouchUser; aiStatus: AISt
 // ── Chat View ──────────────────────────────────────────────────────────────────
 type AnimState = 'idle' | 'typing' | 'thinking' | 'responding';
 
-function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greetFade, userName, inputRef, setInputValue, setAnimState, handleSend, messagesEndRef, animState }: any) {
+const ChatView = memo(function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greetFade, userName, inputRef, setInputValue, setAnimState, handleSend, messagesEndRef, animState }: any) {
   const showRings = animState === 'typing';
   const showThinkingScene = animState === 'thinking';
   const [showSuggestions, setShowSuggestions] = useState(() => !hasMessages);
@@ -846,6 +850,7 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
             style={{ opacity: showRings ? 1 : 0, zIndex: 0 }}
           >
             <MagicRings
+              active={showRings}
               color="#ff0099"
               colorTwo="#00ccff"
               ringCount={7}
@@ -955,7 +960,7 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
             className="absolute inset-0 pointer-events-none transition-opacity duration-700"
             style={{ opacity: showRings ? 0.5 : 0, zIndex: 0 }}
           >
-            <MagicRings color="#ff0099" colorTwo="#00ccff" ringCount={5} speed={0.6} attenuation={12} opacity={0.6} noiseAmount={0.04} />
+            <MagicRings active={showRings} color="#ff0099" colorTwo="#00ccff" ringCount={4} speed={0.6} attenuation={12} opacity={0.45} noiseAmount={0.03} />
           </div>
 
           <div
@@ -969,7 +974,7 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
       )}
     </div>
   );
-}
+});
 // ── Search View ────────────────────────────────────────────────────────────────
 function SearchView({ chats, query, setQuery, onSelectChat }: { chats: Conversation[]; query: string; setQuery: (q: string) => void; onSelectChat: (id: string) => void }) {
   const results = query.trim()
@@ -1327,7 +1332,7 @@ function SMenuItem({ icon, label, arrow = false, accent = false }: any) {
 }
 
 // ── Message Bubble ─────────────────────────────────────────────────────────────
-function Bubble({ message }: { message: ChatMessage }) {
+const Bubble = memo(function Bubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
 
@@ -1398,7 +1403,7 @@ function Bubble({ message }: { message: ChatMessage }) {
       </div>
     </div>
   );
-}
+});
 
 function NavBtn({ icon, label, active = false, onClick }: any) {
   const [hov, setHov] = useState(false);

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import MagicRings from "./MagicRings";
 import RobotCharacter from "./RobotCharacter";
-import SplineSceneBackground from "./SplineSceneBackground";
+import InteractiveParticleBackground from "./InteractiveParticleBackground";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const NEON      = "#ff0099";
@@ -790,7 +790,7 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
 
   return (
     <div className="relative h-full">
-      {/* The selected Spline community scene remains mounted as the conversation background. */}
+      {/* The local particle canvas remains mounted as the conversation background. */}
       <div
         aria-hidden={!hasMessages}
         className="pointer-events-none transition-opacity duration-700"
@@ -805,7 +805,7 @@ function ChatView({ messages, hasMessages, sidebarOpen, loading, greetIdx, greet
           overflow: 'hidden',
         }}
       >
-        <SplineSceneBackground active={hasMessages} thinking={showThinkingScene} />
+        <InteractiveParticleBackground active={hasMessages} thinking={showThinkingScene} />
         <div
           className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2 transition-opacity duration-300"
           style={{
